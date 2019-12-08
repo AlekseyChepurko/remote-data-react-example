@@ -2,6 +2,8 @@
 
 .idea
 
+*/api.key.ts
+
 # dependencies
 /node_modules
 /.pnp
