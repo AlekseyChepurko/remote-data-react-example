@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { RemoteData, success, failure, pending, initial, fold } from '@devexperts/remote-data-ts';
 import {apiRequests, SearchResonse} from './api';
 import {
     Button,
@@ -17,9 +18,7 @@ const searchFieldName = 'search';
 
 interface AppComponentState {
     searchText: string | null,
-    items: SearchResonse['data'] | null;
-    isLoading: boolean;
-    error: null | string;
+    rdItems: RemoteData<string, SearchResonse['data']>;
     offset: number;
 }
 
@@ -31,12 +30,12 @@ class AppComponent extends React.PureComponent<unknown, AppComponentState> {
 
         this.state = {
             searchText: null,
-            error: null,
-            items: null,
-            isLoading: false,
+            rdItems: initial,
             offset: 0,
         }
     }
+
+    loadedResults: SearchResonse['data'] = [];
 
     submitSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -44,10 +43,11 @@ class AppComponent extends React.PureComponent<unknown, AppComponentState> {
         const searchText = formData.get(searchFieldName);
 
         if (typeof searchText === 'string') {
+            this.loadedResults = [];
+
             this.setState({
-                searchText: searchText,
-                items: null,
-                offset: 0,
+                rdItems: initial,
+                searchText,
             }, this.loadMore);
         }
     };
@@ -57,32 +57,29 @@ class AppComponent extends React.PureComponent<unknown, AppComponentState> {
 
         if (!!state.searchText) {
             this.setState({
-                isLoading: true,
-                error: null,
+                rdItems: pending,
             });
 
             apiRequests
                 .search(state.searchText, state.offset * gifsLimitPerRequest, gifsLimitPerRequest)
                 .then<SearchResonse>(response => response.json())
-                .then(response => 
+                .then(response => {
                     this.setState({
-                        items: [...(state.items || []), ...response.data],
-                        isLoading: false,
+                        rdItems: success(response.data),
                         offset: state.offset + 1,
                     })
-                )
+                })
                 .catch(() => {
                     this.setState({
-                        error: 'Error while downloading data',
-                        isLoading: false,
+                        rdItems: failure('Error while downloading data'),
                     });
                 })
         }
     }
 
-    renderLoadindContainer = () => {
+    renderPending = () => {
         return (
-            <Container fixed className="loading__container">
+            <Container className="loading__container">
                 <CircularProgress />
             </Container>
         );
@@ -99,24 +96,33 @@ class AppComponent extends React.PureComponent<unknown, AppComponentState> {
 
     renderDataList = (dataList: SearchResonse['data']) => {
         return (
-            <>
-                <GridList cellHeight={200} cols={5} className="search-results__container">
-                    {dataList.map(tile => (
-                        <GridListTile key={tile.id} cols={1}>
-                            <Image src={tile.images.fixed_width.url} height={200} />
-                        </GridListTile>
-                    ))}
-                </GridList>
-                <Fab className="load-more" color="primary" onClick={this.loadMore}>
-                    <AddIcon />
-                </Fab>
-            </>
-        )
+            dataList.map(tile => (
+                <GridListTile key={tile.id} cols={1}>
+                    <Image src={tile.images.fixed_width.url} height={200} />
+                </GridListTile>
+            ))   
+        );
+    }
+
+    renderRemoteData = () => {
+        const state = this.state;
+
+        return fold<string, SearchResonse['data'], React.ReactNode>(
+            () => null,
+            this.renderPending,
+            this.renderError,
+            items => {
+                this.loadedResults = [
+                    ...this.loadedResults,
+                    ...items
+                ];
+
+            return this.renderDataList(items);
+            },
+        )(state.rdItems);
     }
 
     render() {
-        const state = this.state;
-
         return (
             <div className="search__form-container">
                 <form className="search__form" onSubmit={this.submitSearch}>
@@ -130,9 +136,16 @@ class AppComponent extends React.PureComponent<unknown, AppComponentState> {
                 </form>
                 <div style={{height: 40}} />
 
-                {state.isLoading && this.renderLoadindContainer()}
-                {state.items && this.renderDataList(state.items)}
-                {state.error && this.renderError(state.error)}
+                <GridList cellHeight={200} cols={5} className="search-results__container">
+                    {this.renderDataList(this.loadedResults)}
+                    {this.renderRemoteData()}
+                </GridList>
+
+                {this.loadedResults.length !== 0 && (
+                    <Fab className="load-more" color="primary" onClick={this.loadMore}>
+                        <AddIcon />
+                    </Fab>
+                )}
             </div>
             )
     }
