@@ -1,0 +1,24 @@
+.image {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.image.image_success {
+    object-fit: none;
+}
+
+.ImageComponent {
+    display: flex;
+    justify-content: center;
+    height: 100%;
+}
+
+.ImageComponent .ImageComponent__Skeleton {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ImageComponent .MuiCircularProgress-indeterminate {
+    animation: none;
+}
