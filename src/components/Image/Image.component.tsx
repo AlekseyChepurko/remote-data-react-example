@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { RemoteData, success, failure, pending, initial, fold } from '@devexperts/remote-data-ts';
+import { pipe } from 'fp-ts/lib/pipeable';
 import { Button } from '@material-ui/core';
 import Skeleton from '@material-ui/lab/Skeleton';
 
@@ -11,9 +13,7 @@ interface ImageProps {
 }
 
 interface ImageState {
-    isLoading: boolean;
-    error?: string;
-    imageSrc?: string;
+    image: RemoteData<string, string>;
 }
 
 class ImageComponent extends React.PureComponent<ImageProps, ImageState> {
@@ -21,7 +21,7 @@ class ImageComponent extends React.PureComponent<ImageProps, ImageState> {
         super(props);
 
         this.state = {
-            isLoading: false,
+            image: initial,
         }
     }
 
@@ -29,7 +29,7 @@ class ImageComponent extends React.PureComponent<ImageProps, ImageState> {
         const props = this.props;
 
         this.setState({
-            isLoading: true,
+            image: pending,
         });
 
         const image = new Image();
@@ -38,15 +38,13 @@ class ImageComponent extends React.PureComponent<ImageProps, ImageState> {
 
         image.onload = () => {
             this.setState({
-                imageSrc: props.src,
-                isLoading: false,
+                image: success(props.src),
             });
         };
 
         image.onerror = (e) => {
             this.setState({
-                isLoading: false,
-                error: typeof e === 'string' ? e : 'Error while loading image',
+                image: failure(typeof e === 'string' ? e : 'Error while loading image'),
             });
         }
     }
@@ -60,41 +58,53 @@ class ImageComponent extends React.PureComponent<ImageProps, ImageState> {
         this.loadImage(props.src);
     }
 
-    renderContent = () => {
+    renderPending = () => {
         const props = this.props;
+
+        return (
+            <Skeleton
+                className="ImageComponent__Skeleton"
+                width={props.height}
+                height={props.height}
+                variant="rect"
+            >
+                <img className="image" src="slowpoke.png" alt=""/>
+            </Skeleton>
+        );
+    };
+
+    renderError = () => {
+        const props = this.props;
+
+        return (
+            <Skeleton
+                className="ImageComponent__Skeleton"
+                width={props.height}
+                height={props.height}
+                variant="rect"
+                disableAnimate
+            >
+                <Button variant="contained" color="primary" onClick={this.tryAgain(props.src)}>Try again</Button>
+            </Skeleton>
+        );
+    }
+
+    renderImage = (src: string) => {
+        return <img className="image image_success" src={src} alt=""/>
+    };
+
+    renderContent = () => {
         const state = this.state;
 
-        if (state.isLoading) {
-            return (
-                <Skeleton
-                    className="ImageComponent__Skeleton"
-                    width={props.height}
-                    height={props.height}
-                    variant="rect"
-                >
-                    <img className="image" src="slowpoke.png" alt=""/>
-                </Skeleton>
-            );
-        }
-
-        if (state.imageSrc) {
-            return <img className="image image_success" src={state.imageSrc} alt=""/>
-        }
-
-        if (state.error) {
-            return (
-                <Skeleton
-                    className="ImageComponent__Skeleton"
-                    width={props.height}
-                    height={props.height}
-                    variant="rect"
-                    disableAnimate
-                >
-                    <Button variant="contained" color="primary" onClick={this.tryAgain(props.src)}>Try again</Button>
-                </Skeleton>
-            );
-        }
-        return 'wtf';
+        return pipe(
+            state.image,
+            fold(
+                () => null,
+                this.renderPending,
+                this.renderError,
+                this.renderImage,
+            )
+        );
     }
 
     render() {
