@@ -13,5 +13,6 @@ export interface SearchResonse {
                 url: string;
             }
         },
-    }[]
+    }[],
+    message?: string;
 }
